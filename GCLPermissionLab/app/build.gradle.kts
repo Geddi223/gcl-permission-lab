@@ -8,7 +8,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.gcl.permissionlab"
+        applicationId = "com.gcl.permissionlab.installtest"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

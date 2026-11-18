@@ -31,6 +31,19 @@ jobs:
         working-directory: GCLPermissionLab
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Verify APK package, signature, and integrity
+        shell: bash
+        run: |
+          APK="GCLPermissionLab/app/build/outputs/apk/debug/app-debug.apk"
+          unzip -t "$APK"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="${APKSIGNER%/apksigner}/aapt"
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.gcl.permissionlab.installtest'"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          sha256sum "$APK"
+
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
         with:

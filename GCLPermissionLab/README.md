@@ -19,7 +19,7 @@ APK output:
 `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Build an APK with GitHub Actions
-The `Build Android Debug APK` workflow (`.github/workflows/build-apk.yml`) builds the debug APK on pushes, pull requests, or when started manually from the repository's Actions tab. When adding this folder to GitHub, preserve the outer folder structure so `.github/` and `GCLPermissionLab/` are both at the repository root. The workflow uses JDK 17, Gradle 8.9, and Android SDK 35. The Android Gradle Plugin signs the debug APK with its standard debug key; no signing secrets or setup are required for installing this build on a device.
+The `Build Android Debug APK` workflow (`.github/workflows/build-apk.yml`) builds the debug APK on pushes, pull requests, or when started manually from the repository's Actions tab. When adding this folder to GitHub, preserve the outer folder structure so `.github/` and `GCLPermissionLab/` are both at the repository root. The workflow uses JDK 17, Gradle 8.9, and Android SDK 35. The Android Gradle Plugin signs the debug APK with its standard debug key; no signing secrets or setup are required for installing this build on a device. The workflow verifies the package ID, APK ZIP integrity, and Android APK signature before uploading.
 
 After a successful run, open the run in GitHub → **Artifacts** → download `GCL-Permission-Lab-debug`. The downloaded archive contains `app-debug.apk`. Debug builds are for testing and are not suitable for publishing to the Play Store.
 
@@ -32,18 +32,20 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 If running the command from Windows CMD, use the full Windows path to the APK.
 
-## Package ID
-`com.gcl.permissionlab`
+## Package ID and installation
+The troubleshooting APK uses package ID `com.gcl.permissionlab.installtest`, distinct from the original `com.gcl.permissionlab` package. It can therefore be installed alongside that original app instead of being rejected because its signing certificate differs.
+
+Debug signing keys on GitHub-hosted runners are temporary. If installing a newer workflow build over a previous troubleshooting APK fails with a signature conflict, uninstall `GCL Permission Lab Install Test` first, then install the new APK. Android/Samsung may also require allowing the app used to open the APK (for example, My Files or Chrome) to **Install unknown apps** in Settings → Security and privacy → More security settings → Install unknown apps. The exact menu labels vary by phone and Android version. This is a sideloading system setting, not something the app can change.
 
 ## Inspect declared permissions
 ```bash
-adb shell dumpsys package com.gcl.permissionlab
+adb shell dumpsys package com.gcl.permissionlab.installtest
 ```
 
 To reset permissions for another recording take:
 ```bash
-adb shell pm revoke com.gcl.permissionlab android.permission.CAMERA
-adb shell pm revoke com.gcl.permissionlab android.permission.RECORD_AUDIO
-adb shell pm revoke com.gcl.permissionlab android.permission.ACCESS_COARSE_LOCATION
-adb shell pm revoke com.gcl.permissionlab android.permission.ACCESS_FINE_LOCATION
+adb shell pm revoke com.gcl.permissionlab.installtest android.permission.CAMERA
+adb shell pm revoke com.gcl.permissionlab.installtest android.permission.RECORD_AUDIO
+adb shell pm revoke com.gcl.permissionlab.installtest android.permission.ACCESS_COARSE_LOCATION
+adb shell pm revoke com.gcl.permissionlab.installtest android.permission.ACCESS_FINE_LOCATION
 ```
