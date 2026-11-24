@@ -1,6 +1,6 @@
 # GCL Permission Lab
 
-A demonstration app for user-controlled camera, microphone, and location access.
+A cybersecurity-awareness demonstration app for authorized, user-controlled camera, microphone, and location access.
 
 ## Safety and behavior
 - Camera preview starts only after the user presses **Start camera** and grants camera permission.
@@ -37,6 +37,25 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 If running the command from Windows CMD, use the full Windows path to the APK.
+
+For an authorized phone demonstration:
+1. Enable **Developer options** on the phone.
+2. Enable **Wireless debugging** and approve the connection shown on the phone.
+3. From Windows CMD, use the platform-tools directory:
+
+```bat
+cd /d C:\Users\HP\Downloads\platform-tools-latest-windows\platform-tools
+adb devices
+adb install -r C:\Users\HP\Downloads\GCL-Permission-Lab-APK\app-debug.apk
+```
+
+4. Open **GCL Permission Lab**, then press each feature button while viewers watch the permission prompt and live indication.
+5. Reset a feature during rehearsal with `adb shell pm revoke com.gcl.permissionlab android.permission.CAMERA`, `...RECORD_AUDIO`, or the location permissions.
+
+This app is for authorized awareness demonstrations. It does not send camera, microphone, or location data to a server. Android permission indicators and the app's visible status remain the on-device proof of activity.
+
+## MobSF review
+Upload the generated APK to MobSF on the authorized lab machine. In MobSF, review the manifest, declared permissions, certificate/signature, and network security findings. The app should be interpreted as a normal permission-holding lab APK, not as a remote-control or surveillance application.
 
 ## Package ID and installation
 The app keeps package ID `com.gcl.permissionlab`.

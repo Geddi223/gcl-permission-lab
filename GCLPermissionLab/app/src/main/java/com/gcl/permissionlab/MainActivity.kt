@@ -65,19 +65,20 @@ class MainActivity : ComponentActivity() {
         }
 
         page.addView(TextView(this).apply {
-            text = "GCL PERMISSION LAB"
+            text = "GCL CYBERSECURITY AWARENESS"
             textSize = 25f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(0xFF10243A.toInt())
         })
         page.addView(TextView(this).apply {
-            text = "User-controlled privacy demonstrations"
+            text = "Authorized camera, microphone & location demo"
             textSize = 15f
             setTextColor(0xFF526579.toInt())
             setPadding(0, dp(6), 0, dp(18))
         })
         page.addView(TextView(this).apply {
-            text = "No capture or location access begins until you press the matching control."
+            text = "DEMONSTRATION SAFETY\nAll access is visible and starts only after you press the matching control. " +
+                "This app performs no background capture, hidden recording, or network transmission."
             textSize = 14f
             setTextColor(0xFF17435E.toInt())
             setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -113,6 +114,13 @@ class MainActivity : ComponentActivity() {
         }
         page.addView(statusView.apply {
             setPadding(dp(14), dp(14), dp(14), dp(14))
+        })
+
+        page.addView(TextView(this).apply {
+            text = "\nFor this presentation, pair the app with phone settings and ADB only on your own authorized device."
+            textSize = 12f
+            setTextColor(0xFF718096.toInt())
+            gravity = Gravity.CENTER
         })
 
         val scroll = ScrollView(this).apply { addView(page) }
@@ -275,6 +283,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         if (isRecording) stopRecording()
+        if (cameraActive) stopCamera()
         stopPlayback()
         super.onStop()
     }
