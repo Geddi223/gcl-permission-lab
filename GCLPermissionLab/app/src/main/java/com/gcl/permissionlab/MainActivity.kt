@@ -1,8 +1,12 @@
 package com.gcl.permissionlab
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.graphics.Typeface
+import android.media.MediaPlayer
+import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
@@ -11,31 +15,44 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import java.io.File
 
 class MainActivity : ComponentActivity() {
-
+    private lateinit var cameraPreview: PreviewView
+    private lateinit var cameraButton: Button
+    private lateinit var microphoneButton: Button
+    private lateinit var playbackButton: Button
+    private lateinit var locationButton: Button
     private lateinit var statusView: TextView
 
-    private val cameraLauncher =
+    private var cameraActive = false
+    private var cameraUseCase: Preview? = null
+    private var recorder: MediaRecorder? = null
+    private var player: MediaPlayer? = null
+    private var isRecording = false
+    private var recordingFile: File? = null
+
+    private val cameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            updateStatus("Camera", granted)
+            if (granted) startCamera() else setStatus("Camera: permission denied")
         }
 
-    private val microphoneLauncher =
+    private val microphonePermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            updateStatus("Microphone", granted)
+            if (granted) startRecording() else setStatus("Microphone: permission denied")
         }
 
-    private val locationLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-            val approximate = result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-            val precise = result[Manifest.permission.ACCESS_FINE_LOCATION] == true
-            statusView.text = when {
-                precise -> "Location: PRECISE permission granted"
-                approximate -> "Location: APPROXIMATE permission granted"
-                else -> "Location: permission not granted"
-            }
+    private val locationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+            if (granted.values.any { it }) requestLocation()
+            else setStatus("Location: permission denied")
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,131 +64,254 @@ class MainActivity : ComponentActivity() {
             setBackgroundColor(0xFFF3F6FA.toInt())
         }
 
-        val scroll = ScrollView(this).apply {
-            addView(page)
-        }
-
-        val title = TextView(this).apply {
+        page.addView(TextView(this).apply {
             text = "GCL PERMISSION LAB"
             textSize = 25f
+            setTypeface(typeface, Typeface.BOLD)
             setTextColor(0xFF10243A.toInt())
-            typeface = Typeface.DEFAULT_BOLD
-        }
-        page.addView(title)
-
-        val subtitle = TextView(this).apply {
-            text = "Android privacy & permission demonstration"
+        })
+        page.addView(TextView(this).apply {
+            text = "User-controlled privacy demonstrations"
             textSize = 15f
             setTextColor(0xFF526579.toInt())
             setPadding(0, dp(6), 0, dp(18))
-        }
-        page.addView(subtitle)
-
-        val notice = TextView(this).apply {
-            text = "TRAINING APP ONLY\nEach button opens Android's permission prompt. " +
-                "This app does not take photos, record audio, read your location, " +
-                "or send data anywhere."
+        })
+        page.addView(TextView(this).apply {
+            text = "No capture or location access begins until you press the matching control."
             textSize = 14f
             setTextColor(0xFF17435E.toInt())
             setPadding(dp(14), dp(14), dp(14), dp(14))
             setBackgroundColor(0xFFDCEEF8.toInt())
-        }
-        page.addView(notice)
+        })
 
-        addActionButton(page, "Test camera permission") {
-            cameraLauncher.launch(Manifest.permission.CAMERA)
-        }
-        addActionButton(page, "Test microphone permission") {
-            microphoneLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-        addActionButton(page, "Test location permission") {
-            locationLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                )
+        page.addSectionTitle("Camera")
+        cameraPreview = PreviewView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(240)
             )
+            setBackgroundColor(0xFF10243A.toInt())
+        }
+        page.addView(cameraPreview)
+        cameraButton = page.addActionButton("Start camera") { toggleCamera() }
+
+        page.addSectionTitle("Microphone")
+        microphoneButton = page.addActionButton("Start recording") { toggleRecording() }
+        playbackButton = page.addActionButton("Play recording") { playRecording() }.apply {
+            isEnabled = false
         }
 
-        val statusTitle = TextView(this).apply {
-            text = "Permission result"
-            textSize = 18f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(0xFF10243A.toInt())
-            setPadding(0, dp(20), 0, dp(8))
-        }
-        page.addView(statusTitle)
+        page.addSectionTitle("Location")
+        locationButton = page.addActionButton("Get current location") { getLocation() }
 
         statusView = TextView(this).apply {
-            text = "Camera: ${permissionState(Manifest.permission.CAMERA)}\n" +
-                "Microphone: ${permissionState(Manifest.permission.RECORD_AUDIO)}\n" +
-                "Location: ${locationState()}"
+            text = "Camera: stopped\nMicrophone: not recording\nLocation: not requested"
             textSize = 14f
             setTextColor(0xFF26384A.toInt())
             setPadding(dp(14), dp(14), dp(14), dp(14))
             setBackgroundColor(0xFFFFFFFF.toInt())
         }
-        page.addView(statusView)
+        page.addView(statusView.apply {
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        })
 
-        val footer = TextView(this).apply {
-            text = "\nGedi Creative Lab • Authorized educational use"
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(0xFF718096.toInt())
-        }
-        page.addView(footer)
-
+        val scroll = ScrollView(this).apply { addView(page) }
         setContentView(scroll)
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (::statusView.isInitialized) refreshStatus()
+    private fun toggleCamera() {
+        if (cameraActive) stopCamera() else {
+            if (hasPermission(Manifest.permission.CAMERA)) startCamera()
+            else cameraPermission.launch(Manifest.permission.CAMERA)
+        }
     }
 
-    private fun addActionButton(parent: LinearLayout, label: String, action: () -> Unit) {
-        val button = Button(this).apply {
+    private fun startCamera() {
+        val providerFuture = ProcessCameraProvider.getInstance(this)
+        providerFuture.addListener({
+            val provider = providerFuture.get()
+            val preview = Preview.Builder().build().also {
+                it.surfaceProvider = cameraPreview.surfaceProvider
+            }
+            try {
+                provider.unbindAll()
+                provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview)
+                cameraUseCase = preview
+                cameraActive = true
+                cameraButton.text = "Stop camera"
+                setStatus("Camera: live preview started")
+            } catch (error: Exception) {
+                setStatus("Camera: unable to start (${error.message})")
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun stopCamera() {
+        val provider = ProcessCameraProvider.getInstance(this)
+        provider.get()?.unbindAll()
+        cameraActive = false
+        cameraUseCase = null
+        cameraButton.text = "Start camera"
+        setStatus("Camera: stopped")
+    }
+
+    private fun toggleRecording() {
+        if (isRecording) stopRecording()
+        else if (hasPermission(Manifest.permission.RECORD_AUDIO)) startRecording()
+        else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    private fun startRecording() {
+        stopPlayback()
+        recordingFile = File(filesDir, "gcl-recording.m4a")
+        recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            MediaRecorder(this)
+        } else {
+            @Suppress("DEPRECATION")
+            MediaRecorder()
+        }.apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setOutputFile(recordingFile!!.absolutePath)
+            try {
+                prepare()
+                start()
+                isRecording = true
+                microphoneButton.text = "Stop recording"
+                playbackButton.isEnabled = false
+                setStatus("Microphone: recording...")
+            } catch (error: Exception) {
+                setStatus("Microphone: unable to record (${error.message})")
+                release()
+                recorder = null
+            }
+        }
+    }
+
+    private fun stopRecording() {
+        try {
+            recorder?.stop()
+        } catch (_: Exception) {
+        } finally {
+            recorder?.release()
+            recorder = null
+        }
+        isRecording = false
+        microphoneButton.text = "Start recording"
+        playbackButton.isEnabled = recordingFile?.exists() == true
+        setStatus("Microphone: saved locally (${recordingFile?.name})")
+    }
+
+    private fun playRecording() {
+        if (player?.isPlaying == true) {
+            stopPlayback()
+            return
+        }
+        val file = recordingFile
+        if (file == null || !file.exists()) {
+            setStatus("Microphone: no recording available")
+            return
+        }
+        stopPlayback()
+        player = MediaPlayer().apply {
+            try {
+                setDataSource(file.absolutePath)
+                prepare()
+                setOnCompletionListener {
+                    playbackButton.text = "Play recording"
+                    release()
+                    player = null
+                }
+                start()
+                playbackButton.text = "Stop playback"
+            } catch (error: Exception) {
+                setStatus("Microphone: unable to play (${error.message})")
+                release()
+                player = null
+            }
+        }
+    }
+
+    private fun stopPlayback() {
+        if (player?.isPlaying == true) player?.stop()
+        player?.release()
+        player = null
+        playbackButton.text = "Play recording"
+    }
+
+    private fun getLocation() {
+        if (hasPermission(Manifest.permission.ACCESS_FINE_LOCATION) ||
+            hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+        ) requestLocation()
+        else locationPermission.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun requestLocation() {
+        setStatus("Location: requesting current position...")
+        val client = LocationServices.getFusedLocationProviderClient(this)
+        client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            .addOnSuccessListener { location ->
+                if (location != null) {
+                    setStatus(
+                        "Location:\nLatitude: ${"%.6f".format(location.latitude)}\n" +
+                            "Longitude: ${"%.6f".format(location.longitude)}\n" +
+                            "Accuracy: ${"%.1f".format(location.accuracy)} m"
+                    )
+                } else {
+                    setStatus("Location: no position was available")
+                }
+            }
+            .addOnFailureListener { error ->
+                setStatus("Location: unable to get position (${error.message})")
+            }
+    }
+
+    override fun onStop() {
+        if (isRecording) stopRecording()
+        stopPlayback()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (cameraActive) stopCamera()
+        super.onDestroy()
+    }
+
+    private fun setStatus(text: String) {
+        statusView.text = text
+    }
+
+    private fun hasPermission(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun LinearLayout.addSectionTitle(text: String) {
+        addView(TextView(this@MainActivity).apply {
+            this.text = text
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFF10243A.toInt())
+            setPadding(0, dp(18), 0, dp(8))
+        })
+    }
+
+    private fun LinearLayout.addActionButton(label: String, action: () -> Unit): Button =
+        Button(this@MainActivity).apply {
             text = label
             isAllCaps = false
             setOnClickListener { action() }
+        }.also { button ->
+            this@addActionButton.addView(button, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(8) })
         }
-        val params = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topMargin = dp(12)
-        }
-        parent.addView(button, params)
-    }
-
-    private fun updateStatus(name: String, granted: Boolean) {
-        refreshStatus()
-        statusView.append("\nLast request — $name: ${if (granted) "GRANTED" else "DENIED"}")
-    }
-
-    private fun refreshStatus() {
-        statusView.text = "Camera: ${permissionState(Manifest.permission.CAMERA)}\n" +
-            "Microphone: ${permissionState(Manifest.permission.RECORD_AUDIO)}\n" +
-            "Location: ${locationState()}"
-    }
-
-    private fun permissionState(permission: String): String =
-        if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED)
-            "GRANTED" else "NOT GRANTED"
-
-    private fun locationState(): String {
-        val fine = ContextCompat.checkSelfPermission(
-            this, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(
-            this, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        return when {
-            fine -> "PRECISE GRANTED"
-            coarse -> "APPROXIMATE GRANTED"
-            else -> "NOT GRANTED"
-        }
-    }
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()

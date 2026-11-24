@@ -1,12 +1,18 @@
 # GCL Permission Lab
 
-A small Android training app for demonstrating Android runtime permission prompts.
+A demonstration app for user-controlled camera, microphone, and location access.
 
 ## Safety and behavior
-- Requests camera, microphone, and foreground location permission only after the user taps the matching button.
-- Displays whether Android reports each permission as granted.
-- Does **not** open the camera, record audio, retrieve coordinates, run in the background, or transmit data.
-- Uses no internet permission.
+- Camera preview starts only after the user presses **Start camera** and grants camera permission.
+- Recording starts only after the user presses **Start recording** and grants microphone permission.
+- Location is requested only after the user presses **Get current location** and grants location permission.
+- Recording is saved locally as `gcl-recording.m4a` in the app's private files directory.
+- The app has no background capture, network transmission, or playback network access.
+
+## Features
+- CameraX live preview with Start/Stop controls.
+- MediaRecorder microphone capture with Start/Stop and local playback controls.
+- Fused location provider with latitude, longitude, and accuracy.
 
 ## Open in Android Studio
 1. Extract the ZIP.
@@ -33,19 +39,19 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 If running the command from Windows CMD, use the full Windows path to the APK.
 
 ## Package ID and installation
-The troubleshooting APK uses package ID `com.gcl.permissionlab.installtest`, distinct from the original `com.gcl.permissionlab` package. It can therefore be installed alongside that original app instead of being rejected because its signing certificate differs.
+The app keeps package ID `com.gcl.permissionlab`.
 
-Debug signing keys on GitHub-hosted runners are temporary. If installing a newer workflow build over a previous troubleshooting APK fails with a signature conflict, uninstall `GCL Permission Lab Install Test` first, then install the new APK. Android/Samsung may also require allowing the app used to open the APK (for example, My Files or Chrome) to **Install unknown apps** in Settings → Security and privacy → More security settings → Install unknown apps. The exact menu labels vary by phone and Android version. This is a sideloading system setting, not something the app can change.
+If upgrading from an APK signed with a different certificate, Android may require uninstalling the old app first. Samsung may also require allowing the app used to open the APK (for example, My Files or Chrome) to **Install unknown apps** in Settings → Security and privacy → More security settings → Install unknown apps. The exact menu labels vary by phone and Android version.
 
 ## Inspect declared permissions
 ```bash
-adb shell dumpsys package com.gcl.permissionlab.installtest
+adb shell dumpsys package com.gcl.permissionlab
 ```
 
 To reset permissions for another recording take:
 ```bash
-adb shell pm revoke com.gcl.permissionlab.installtest android.permission.CAMERA
-adb shell pm revoke com.gcl.permissionlab.installtest android.permission.RECORD_AUDIO
-adb shell pm revoke com.gcl.permissionlab.installtest android.permission.ACCESS_COARSE_LOCATION
-adb shell pm revoke com.gcl.permissionlab.installtest android.permission.ACCESS_FINE_LOCATION
+adb shell pm revoke com.gcl.permissionlab android.permission.CAMERA
+adb shell pm revoke com.gcl.permissionlab android.permission.RECORD_AUDIO
+adb shell pm revoke com.gcl.permissionlab android.permission.ACCESS_COARSE_LOCATION
+adb shell pm revoke com.gcl.permissionlab android.permission.ACCESS_FINE_LOCATION
 ```

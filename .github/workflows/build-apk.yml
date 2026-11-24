@@ -40,7 +40,7 @@ jobs:
           AAPT="${APKSIGNER%/apksigner}/aapt"
           test -x "$APKSIGNER"
           test -x "$AAPT"
-          "$AAPT" dump badging "$APK" | grep -F "package: name='com.gcl.permissionlab.installtest'"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.gcl.permissionlab'"
           "$APKSIGNER" verify --verbose --print-certs "$APK"
           sha256sum "$APK"
 
